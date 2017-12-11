@@ -609,6 +609,7 @@ class Calendar extends React.Component {
   render() {
     let {
        view, toolbar, events
+      , extraButton = null
       , culture
       , components = {}
       , formats = {}
@@ -655,6 +656,7 @@ class Calendar extends React.Component {
             onViewChange={this.handleViewChange}
             onNavigate={this.handleNavigate}
             messages={messages}
+            extraButton={extraButton}
           />
         }
         <View

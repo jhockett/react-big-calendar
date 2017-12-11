@@ -5,6 +5,7 @@ import { navigate } from './utils/constants';
 
 class Toolbar extends React.Component {
   static propTypes = {
+    extraButton: PropTypes.object,
     view: PropTypes.string.isRequired,
     views: PropTypes.arrayOf(
       PropTypes.string,
@@ -16,11 +17,19 @@ class Toolbar extends React.Component {
   }
 
   render() {
-    let { messages, label } = this.props;
+    let { messages, label, extraButton } = this.props;
 
     return (
       <div className='rbc-toolbar'>
         <span className='rbc-btn-group'>
+          { extraButton &&
+            <button
+              type='button'
+              onClick={extraButton.onClick}
+            >
+              {extraButton.text}
+            </button>
+          }
           <button
             type='button'
             onClick={this.navigate.bind(null, navigate.TODAY)}
