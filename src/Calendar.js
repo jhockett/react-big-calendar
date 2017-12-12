@@ -56,6 +56,8 @@ let now = new Date();
 class Calendar extends React.Component {
   static propTypes = {
 
+    extraButton: PropTypes.object,
+
     /**
      * Props passed to main calendar `<div>`.
      */
