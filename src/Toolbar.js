@@ -21,16 +21,19 @@ class Toolbar extends React.Component {
 
     return (
       <div className='rbc-toolbar'>
-        <span className='rbc-btn-group'>
+        <span className='rbc-btn-group-extra'>
           { extraButton &&
             <button
               type='button'
+              className='extraButton'
               onClick={extraButton.onClick}
               disabled={extraButton.disabled || false}
             >
               {extraButton.text}
             </button>
           }
+        </span>
+        <span className='rbc-btn-group'>
           <button
             type='button'
             onClick={this.navigate.bind(null, navigate.TODAY)}
