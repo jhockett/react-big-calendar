@@ -26,6 +26,7 @@ class WorkWeek extends React.Component {
 }
 
 WorkWeek.range = workWeekRange
+
 WorkWeek.navigate = Week.navigate
 
 WorkWeek.title = (date, { localizer }) => {

@@ -205,11 +205,6 @@ Agenda.range = (start, { length = Agenda.defaultProps.length }) => {
   return { start, end }
 }
 
-Agenda.range = (start, { length = Agenda.defaultProps.length }) => {
-  let end = dates.add(start, length, 'day');
-  return { start, end };
-};
-
 Agenda.navigate = (date, action, { length = Agenda.defaultProps.length }) => {
   switch (action) {
     case navigate.PREVIOUS:

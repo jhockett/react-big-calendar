@@ -934,18 +934,6 @@ class Calendar extends React.Component {
     }
   }
 
-  handleRangeChange = (date, view) => {
-    let { onRangeChange } = this.props
-    if (onRangeChange) {
-      let range = VIEWS[view].range(date, {})
-      if (Array.isArray(range)) {
-        onRangeChange({ start: range[0], end: range[range.length - 1] })
-      } else {
-        onRangeChange(range)
-      }
-    }
-  }
-
   handleNavigate = (action, newDate) => {
     let { view, date, getNow, onNavigate, ...props } = this.props
     let ViewComponent = this.getView()
