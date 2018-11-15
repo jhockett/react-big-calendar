@@ -5,51 +5,34 @@ import cn from 'classnames'
 
 import Selection, { getBoundsForNode, isEvent } from './Selection'
 import dates from './utils/dates'
+import * as TimeSlotUtils from './utils/TimeSlots'
 import { isSelected } from './utils/selection'
-import localizer from './localizer'
 
 import { notify } from './utils/helpers'
-import { accessor, elementType, dateFormat } from './utils/propTypes'
-import { accessor as get } from './utils/accessors'
-
-import getStyledEvents, {
-  positionFromDate,
-  startsBefore,
-} from './utils/dayViewLayout'
-
-import TimeColumn from './TimeColumn'
-
-function snapToSlot(date, step) {
-  var roundTo = 1000 * 60 * step
-  return new Date(Math.floor(date.getTime() / roundTo) * roundTo)
-}
-
-function startsAfter(date, max) {
-  return dates.gt(dates.merge(max, date), max, 'minutes')
-}
+import * as DayEventLayout from './utils/DayEventLayout'
+import TimeSlotGroup from './TimeSlotGroup'
+import TimeGridEvent from './TimeGridEvent'
 
 class DayColumn extends React.Component {
   static propTypes = {
     events: PropTypes.array.isRequired,
     step: PropTypes.number.isRequired,
+    date: PropTypes.instanceOf(Date).isRequired,
     min: PropTypes.instanceOf(Date).isRequired,
     max: PropTypes.instanceOf(Date).isRequired,
-    now: PropTypes.instanceOf(Date),
+    getNow: PropTypes.func.isRequired,
+    isNow: PropTypes.bool,
 
     rtl: PropTypes.bool,
-    titleAccessor: accessor,
-    allDayAccessor: accessor.isRequired,
-    startAccessor: accessor.isRequired,
-    endAccessor: accessor.isRequired,
 
-    selectRangeFormat: dateFormat,
-    eventTimeRangeFormat: dateFormat,
-    eventTimeRangeStartFormat: dateFormat,
-    eventTimeRangeEndFormat: dateFormat,
+    accessors: PropTypes.object.isRequired,
+    components: PropTypes.object.isRequired,
+    getters: PropTypes.object.isRequired,
+    localizer: PropTypes.object.isRequired,
+
     showMultiDayTimes: PropTypes.bool,
     culture: PropTypes.string,
     timeslots: PropTypes.number,
-    messages: PropTypes.object,
 
     selected: PropTypes.object,
     selectable: PropTypes.oneOf([true, false, 'ignoreEvents']),
@@ -63,11 +46,7 @@ class DayColumn extends React.Component {
 
     className: PropTypes.string,
     dragThroughEvents: PropTypes.bool,
-    eventPropGetter: PropTypes.func,
-    dayPropGetter: PropTypes.func,
-    dayWrapperComponent: elementType,
-    eventComponent: elementType,
-    eventWrapperComponent: elementType.isRequired,
+    resource: PropTypes.any,
   }
 
   static defaultProps = {
@@ -77,192 +56,178 @@ class DayColumn extends React.Component {
 
   state = { selecting: false }
 
+  constructor(...args) {
+    super(...args)
+
+    this.slotMetrics = TimeSlotUtils.getSlotMetrics(this.props)
+  }
+
   componentDidMount() {
     this.props.selectable && this._selectable()
+
+    if (this.props.isNow) {
+      this.positionTimeIndicator()
+      this.triggerTimeIndicatorUpdate()
+    }
   }
 
   componentWillUnmount() {
     this._teardownSelectable()
+    window.clearTimeout(this._timeIndicatorTimeout)
   }
 
   componentWillReceiveProps(nextProps) {
     if (nextProps.selectable && !this.props.selectable) this._selectable()
     if (!nextProps.selectable && this.props.selectable)
       this._teardownSelectable()
+
+    this.slotMetrics = this.slotMetrics.update(nextProps)
+  }
+
+  triggerTimeIndicatorUpdate() {
+    // Update the position of the time indicator every minute
+    this._timeIndicatorTimeout = window.setTimeout(() => {
+      this.positionTimeIndicator()
+      this.triggerTimeIndicatorUpdate()
+    }, 60000)
+  }
+
+  positionTimeIndicator() {
+    const { min, max, getNow } = this.props
+    const current = getNow()
+    const timeIndicator = this.refs.timeIndicator
+
+    if (current >= min && current <= max) {
+      const { top } = this.slotMetrics.getRange(current, current)
+      timeIndicator.style.top = `${top}%`
+    }
   }
 
   render() {
     const {
-      min,
       max,
-      step,
-      now,
-      selectRangeFormat,
-      culture,
-      dayPropGetter,
-      ...props
+      rtl,
+      isNow,
+      resource,
+      accessors,
+      localizer,
+      getters: { dayProp, ...getters },
+      components: { eventContainerWrapper: EventContainer, ...components },
     } = this.props
 
-    this._totalMin = dates.diff(min, max, 'minutes')
-    let { selecting, startSlot, endSlot } = this.state
-    let slotStyle = this._slotStyle(startSlot, endSlot)
+    let { slotMetrics } = this
+    let { selecting, top, height, startDate, endDate } = this.state
 
-    let selectDates = {
-      start: this.state.startDate,
-      end: this.state.endDate,
-    }
+    let selectDates = { start: startDate, end: endDate }
 
-    const { className, style } =
-      (dayPropGetter && dayPropGetter(max)) || {}
+    const { className, style } = dayProp(max)
 
     return (
-      <TimeColumn
-        {...props}
-        className={cn(
-          'rbc-day-slot',
-          className,
-          dates.isToday(max) && 'rbc-today'
-        )}
+      <div
         style={style}
-        now={now}
-        min={min}
-        max={max}
-        step={step}
+        className={cn(
+          className,
+          'rbc-day-slot',
+          'rbc-time-column',
+          isNow && 'rbc-now',
+          isNow && 'rbc-today', // WHY
+          selecting && 'rbc-slot-selecting'
+        )}
       >
-        {this.renderEvents()}
+        {slotMetrics.groups.map((grp, idx) => (
+          <TimeSlotGroup
+            key={idx}
+            group={grp}
+            resource={resource}
+            getters={getters}
+            components={components}
+          />
+        ))}
+        <EventContainer
+          localizer={localizer}
+          resource={resource}
+          accessors={accessors}
+          getters={getters}
+          components={components}
+          slotMetrics={slotMetrics}
+        >
+          <div className={cn('rbc-events-container', rtl && 'rtl')}>
+            {this.renderEvents()}
+          </div>
+        </EventContainer>
 
         {selecting && (
-          <div className="rbc-slot-selection" style={slotStyle}>
-            <span>
-              {localizer.format(selectDates, selectRangeFormat, culture)}
-            </span>
+          <div className="rbc-slot-selection" style={{ top, height }}>
+            <span>{localizer.format(selectDates, 'selectRangeFormat')}</span>
           </div>
         )}
-      </TimeColumn>
+        {isNow && (
+          <div ref="timeIndicator" className="rbc-current-time-indicator" />
+        )}
+      </div>
     )
   }
 
   renderEvents = () => {
     let {
       events,
-      min,
-      max,
-      showMultiDayTimes,
-      culture,
-      eventPropGetter,
-      selected,
-      messages,
-      eventComponent,
-      eventTimeRangeFormat,
-      eventTimeRangeStartFormat,
-      eventTimeRangeEndFormat,
-      eventWrapperComponent: EventWrapper,
       rtl: isRtl,
+      selected,
+      accessors,
+      localizer,
+      getters,
+      components,
       step,
       timeslots,
-      startAccessor,
-      endAccessor,
-      titleAccessor,
     } = this.props
 
-    let EventComponent = eventComponent
+    const { slotMetrics } = this
+    const { messages } = localizer
 
-    let styledEvents = getStyledEvents({
+    let styledEvents = DayEventLayout.getStyledEvents({
       events,
-      startAccessor,
-      endAccessor,
-      min,
-      showMultiDayTimes,
-      totalMin: this._totalMin,
-      step,
-      timeslots,
+      accessors,
+      slotMetrics,
+      minimumStartDifference: Math.ceil(step * timeslots / 2),
     })
 
     return styledEvents.map(({ event, style }, idx) => {
-      let _eventTimeRangeFormat = eventTimeRangeFormat
-      let _continuesPrior = false
-      let _continuesAfter = false
-      let start = get(event, startAccessor)
-      let end = get(event, endAccessor)
-
-      if (start < min) {
-        start = min
-        _continuesPrior = true
-        _eventTimeRangeFormat = eventTimeRangeEndFormat
-      }
-
-      if (end > max) {
-        end = max
-        _continuesAfter = true
-        _eventTimeRangeFormat = eventTimeRangeStartFormat
-      }
-
-      let continuesPrior = startsBefore(start, min)
-      let continuesAfter = startsAfter(end, max)
-
-      let title = get(event, titleAccessor)
+      let end = accessors.end(event)
+      let start = accessors.start(event)
+      let format = 'eventTimeRangeFormat'
       let label
-      if (_continuesPrior && _continuesAfter) {
-        label = messages.allDay
-      } else {
-        label = localizer.format({ start, end }, _eventTimeRangeFormat, culture)
-      }
 
-      let _isSelected = isSelected(event, selected)
+      const startsBeforeDay = slotMetrics.startsBeforeDay(start)
+      const startsAfterDay = slotMetrics.startsAfterDay(end)
 
-      if (eventPropGetter)
-        var { style: xStyle, className } = eventPropGetter(
-          event,
-          start,
-          end,
-          _isSelected
-        )
+      if (startsBeforeDay) format = 'eventTimeRangeEndFormat'
+      else if (startsAfterDay) format = 'eventTimeRangeStartFormat'
 
-      let { height, top, width, xOffset } = style
+      if (startsBeforeDay && startsAfterDay) label = messages.allDay
+      else label = localizer.format({ start, end }, format)
+
+      let continuesEarlier = startsBeforeDay || slotMetrics.startsBefore(start)
+      let continuesLater = startsAfterDay || slotMetrics.startsAfter(end)
 
       return (
-        <EventWrapper event={event} key={'evt_' + idx}>
-          <div
-            style={{
-              ...xStyle,
-              top: `${top}%`,
-              height: `${height}%`,
-              [isRtl ? 'right' : 'left']: `${Math.max(0, xOffset)}%`,
-              width: `${width}%`,
-            }}
-            title={(typeof label === 'string' ? label + ': ' : '') + title}
-            onClick={e => this._select(event, e)}
-            onDoubleClick={e => this._doubleClick(event, e)}
-            className={cn('rbc-event', className, {
-              'rbc-selected': _isSelected,
-              'rbc-event-continues-earlier': continuesPrior,
-              'rbc-event-continues-later': continuesAfter,
-              'rbc-event-continues-day-prior': _continuesPrior,
-              'rbc-event-continues-day-after': _continuesAfter,
-            })}
-          >
-            <div className="rbc-event-label">{label}</div>
-            <div className="rbc-event-content">
-              {EventComponent ? (
-                <EventComponent event={event} title={title} />
-              ) : (
-                title
-              )}
-            </div>
-          </div>
-        </EventWrapper>
+        <TimeGridEvent
+          style={style}
+          event={event}
+          label={label}
+          key={'evt_' + idx}
+          getters={getters}
+          isRtl={isRtl}
+          getters={getters}
+          components={components}
+          continuesEarlier={continuesEarlier}
+          continuesLater={continuesLater}
+          accessors={accessors}
+          selected={isSelected(event, selected)}
+          onClick={e => this._select(event, e)}
+          onDoubleClick={e => this._doubleClick(event, e)}
+        />
       )
     })
-  }
-
-  _slotStyle = (startSlot, endSlot) => {
-    let top = startSlot / this._totalMin * 100
-    let bottom = endSlot / this._totalMin * 100
-
-    return {
-      top: top + '%',
-      height: bottom - top + '%',
-    }
   }
 
   _selectable = () => {
@@ -286,44 +251,51 @@ class DayColumn extends React.Component {
           return
       }
 
-      this.setState(state)
+      if (
+        this.state.start !== state.start ||
+        this.state.end !== state.end ||
+        this.state.selecting !== state.selecting
+      ) {
+        this.setState(state)
+      }
     }
 
-    let selectionState = ({ y }) => {
-      let { step, min, max } = this.props
-      let { top, bottom } = getBoundsForNode(node)
+    let selectionState = point => {
+      let currentSlot = this.slotMetrics.closestSlotFromPoint(
+        point,
+        getBoundsForNode(node)
+      )
 
-      let mins = this._totalMin
+      if (!this.state.selecting) this._initialSlot = currentSlot
 
-      let range = Math.abs(top - bottom)
+      let initialSlot = this._initialSlot
+      if (initialSlot === currentSlot)
+        currentSlot = this.slotMetrics.nextSlot(initialSlot)
 
-      let current = (y - top) / range
-
-      current = snapToSlot(minToDate(mins * current, min), step)
-
-      if (!this.state.selecting) this._initialDateSlot = current
-
-      let initial = this._initialDateSlot
-
-      if (dates.eq(initial, current, 'minutes'))
-        current = dates.add(current, step, 'minutes')
-
-      let start = dates.max(min, dates.min(initial, current))
-      let end = dates.min(max, dates.max(initial, current))
+      const selectRange = this.slotMetrics.getRange(
+        dates.min(initialSlot, currentSlot),
+        dates.max(initialSlot, currentSlot)
+      )
 
       return {
+        ...selectRange,
         selecting: true,
-        startDate: start,
-        endDate: end,
-        startSlot: positionFromDate(start, min, this._totalMin),
-        endSlot: positionFromDate(end, min, this._totalMin),
+
+        top: `${selectRange.top}%`,
+        height: `${selectRange.height}%`,
       }
     }
 
     let selectorClicksHandler = (box, actionType) => {
-      if (!isEvent(findDOMNode(this), box))
-        this._selectSlot({ ...selectionState(box), action: actionType })
-
+      if (!isEvent(findDOMNode(this), box)) {
+        const { startDate, endDate } = selectionState(box)
+        this._selectSlot({
+          startDate,
+          endDate,
+          action: actionType,
+          box,
+        })
+      }
       this.setState({ selecting: false })
     }
 
@@ -340,9 +312,9 @@ class DayColumn extends React.Component {
 
     selector.on('doubleClick', box => selectorClicksHandler(box, 'doubleClick'))
 
-    selector.on('select', () => {
+    selector.on('select', bounds => {
       if (this.state.selecting) {
-        this._selectSlot({ ...this.state, action: 'select' })
+        this._selectSlot({ ...this.state, action: 'select', bounds })
         this.setState({ selecting: false })
       }
     })
@@ -354,7 +326,7 @@ class DayColumn extends React.Component {
     this._selector = null
   }
 
-  _selectSlot = ({ startDate, endDate, action }) => {
+  _selectSlot = ({ startDate, endDate, action, bounds, box }) => {
     let current = startDate,
       slots = []
 
@@ -367,7 +339,10 @@ class DayColumn extends React.Component {
       slots,
       start: startDate,
       end: endDate,
+      resourceId: this.props.resource,
       action,
+      bounds,
+      box,
     })
   }
 
@@ -378,16 +353,6 @@ class DayColumn extends React.Component {
   _doubleClick = (...args) => {
     notify(this.props.onDoubleClickEvent, args)
   }
-}
-
-function minToDate(min, date) {
-  var dt = new Date(date),
-    totalMins = dates.diff(dates.startOf(date, 'day'), date, 'minutes')
-
-  dt = dates.hours(dt, 0)
-  dt = dates.minutes(dt, totalMins + min)
-  dt = dates.seconds(dt, 0)
-  return dates.milliseconds(dt, 0)
 }
 
 export default DayColumn

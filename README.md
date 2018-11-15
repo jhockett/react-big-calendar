@@ -1,5 +1,4 @@
-react-big-calendar
-========================
+# react-big-calendar
 
 This is just a forked version of react-big-calendar
 
