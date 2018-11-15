@@ -885,7 +885,6 @@ class Calendar extends React.Component {
             label={label}
             onView={this.handleViewChange}
             onNavigate={this.handleNavigate}
-            messages={messages}
             extraButton={extraButton}
             localizer={localizer}
           />
@@ -937,12 +936,11 @@ class Calendar extends React.Component {
 
   handleRangeChange = (date, view) => {
     let { onRangeChange } = this.props
-    if(onRangeChange) {
+    if (onRangeChange) {
       let range = VIEWS[view].range(date, {})
-      if(Array.isArray(range)) {
-        onRangeChange({ start: range[0], end: range[range.length -1]})
-      }
-      else{
+      if (Array.isArray(range)) {
+        onRangeChange({ start: range[0], end: range[range.length - 1] })
+      } else {
         onRangeChange(range)
       }
     }
