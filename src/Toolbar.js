@@ -15,10 +15,26 @@ class Toolbar extends React.Component {
   }
 
   render() {
-    let { localizer: { messages }, label } = this.props
+    let {
+      extraButton,
+      localizer: { messages },
+      label,
+    } = this.props
 
     return (
       <div className="rbc-toolbar">
+        {extraButton && (
+          <span className="rbc-btn-group">
+            <button
+              type="button"
+              className="extraButton"
+              onClick={extraButton.onClick}
+              disabled={extraButton.disabled || false}
+            >
+              {extraButton.text}
+            </button>
+          </span>
+        )}
         <span className="rbc-btn-group">
           <button
             type="button"
