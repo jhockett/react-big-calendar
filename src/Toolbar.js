@@ -29,7 +29,7 @@ class Toolbar extends React.Component {
               type="button"
               className="extraButton"
               onClick={extraButton.onClick}
-              disabled={extraButton.disabled || false}
+              disabled={extraButton.disabled}
             >
               {extraButton.text}
             </button>
