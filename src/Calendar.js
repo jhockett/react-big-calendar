@@ -1,10 +1,9 @@
 import PropTypes from 'prop-types'
 import React from 'react'
-import uncontrollable from 'uncontrollable'
+import { uncontrollable } from 'uncontrollable'
 import cn from 'classnames'
 import {
   accessor,
-  elementType,
   dateFormat,
   dateRangeFormat,
   views as componentViews,
@@ -324,6 +323,15 @@ class Calendar extends React.Component {
     onSelecting: PropTypes.func,
 
     /**
+     * Callback fired when a +{count} more is clicked
+     *
+     * ```js
+     * (events: Object, date: Date) => any
+     * ```
+     */
+    onShowMore: PropTypes.func,
+
+    /**
      * The selected event, if any.
      */
     selected: PropTypes.object,
@@ -355,7 +363,7 @@ class Calendar extends React.Component {
      * }
      * ```
      *
-     * @type Calendar.Views ('month'|'week'|'work_week'|'day'|'agenda')
+     * @type Views ('month'|'week'|'work_week'|'day'|'agenda')
      * @View
      ['month', 'week', 'day', 'agenda']
      */
@@ -369,7 +377,7 @@ class Calendar extends React.Component {
      * Set to `null` to disable drill-down actions.
      *
      * ```js
-     * <BigCalendar
+     * <Calendar
      *   drilldownView="agenda"
      * />
      * ```
@@ -384,7 +392,7 @@ class Calendar extends React.Component {
      * Return `null` to disable drill-down actions.
      *
      * ```js
-     * <BigCalendar
+     * <Calendar
      *   getDrilldownView={(targetDate, currentViewName, configuredViewNames) =>
      *     if (currentViewName === 'month' && configuredViewNames.includes('week'))
      *       return 'week'
@@ -416,8 +424,8 @@ class Calendar extends React.Component {
      * Distance in pixels, from the edges of the viewport, the "show more" overlay should be positioned.
      *
      * ```jsx
-     * <BigCalendar popupOffset={30}/>
-     * <BigCalendar popupOffset={{x: 30, y: 20}}/>
+     * <Calendar popupOffset={30}/>
+     * <Calendar popupOffset={{x: 30, y: 20}}/>
      * ```
      */
     popupOffset: PropTypes.oneOfType([
@@ -634,7 +642,6 @@ class Calendar extends React.Component {
      *   event: MyEvent, // used by each view (Month, Day, Week)
      *   eventWrapper: MyEventWrapper,
      *   eventContainerWrapper: MyEventContainerWrapper,
-     *   dayWrapper: MyDayWrapper,
      *   dateCellWrapper: MyDateCellWrapper,
      *   timeSlotWrapper: MyTimeSlotWrapper,
      *   timeGutterHeader: MyTimeGutterWrapper,
@@ -662,34 +669,34 @@ class Calendar extends React.Component {
      * ```
      */
     components: PropTypes.shape({
-      event: elementType,
-      eventWrapper: elementType,
-      eventContainerWrapper: elementType,
-      dayWrapper: elementType,
-      dateCellWrapper: elementType,
-      timeSlotWrapper: elementType,
-      timeGutterHeader: elementType,
+      event: PropTypes.elementType,
+      eventWrapper: PropTypes.elementType,
+      eventContainerWrapper: PropTypes.elementType,
+      dateCellWrapper: PropTypes.elementType,
+      timeSlotWrapper: PropTypes.elementType,
+      timeGutterHeader: PropTypes.elementType,
+      resourceHeader: PropTypes.elementType,
 
-      toolbar: elementType,
+      toolbar: PropTypes.elementType,
 
       agenda: PropTypes.shape({
-        date: elementType,
-        time: elementType,
-        event: elementType,
+        date: PropTypes.elementType,
+        time: PropTypes.elementType,
+        event: PropTypes.elementType,
       }),
 
       day: PropTypes.shape({
-        header: elementType,
-        event: elementType,
+        header: PropTypes.elementType,
+        event: PropTypes.elementType,
       }),
       week: PropTypes.shape({
-        header: elementType,
-        event: elementType,
+        header: PropTypes.elementType,
+        event: PropTypes.elementType,
       }),
       month: PropTypes.shape({
-        header: elementType,
-        dateHeader: elementType,
-        event: elementType,
+        header: PropTypes.elementType,
+        dateHeader: PropTypes.elementType,
+        event: PropTypes.elementType,
       }),
     }),
 
@@ -783,7 +790,6 @@ class Calendar extends React.Component {
       components: defaults(components[view] || {}, omit(components, names), {
         eventWrapper: NoopWrapper,
         eventContainerWrapper: NoopWrapper,
-        dayWrapper: NoopWrapper,
         dateCellWrapper: NoopWrapper,
         weekWrapper: NoopWrapper,
         timeSlotWrapper: NoopWrapper,
@@ -847,6 +853,7 @@ class Calendar extends React.Component {
       getNow,
       length,
       showMultiDayTimes,
+      onShowMore,
       components: _0,
       formats: _1,
       messages: _2,
@@ -871,7 +878,7 @@ class Calendar extends React.Component {
     return (
       <div
         {...elementProps}
-        className={cn(className, 'rbc-calendar', props.rtl && 'rbc-is-rtl')}
+        className={cn(className, 'rbc-calendar', props.rtl && 'rbc-rtl')}
         style={style}
       >
         {toolbar && (
@@ -886,7 +893,6 @@ class Calendar extends React.Component {
           />
         )}
         <View
-          ref="view"
           {...props}
           events={events}
           date={current}
@@ -903,7 +909,7 @@ class Calendar extends React.Component {
           onSelectEvent={this.handleSelectEvent}
           onDoubleClickEvent={this.handleDoubleClickEvent}
           onSelectSlot={this.handleSelectSlot}
-          onShowMore={this._showMore}
+          onShowMore={onShowMore}
         />
       </div>
     )
@@ -952,7 +958,11 @@ class Calendar extends React.Component {
     }
 
     let views = this.getViews()
-    this.handleRangeChange(this.props.date, views[view], view)
+    this.handleRangeChange(
+      this.props.date || this.props.getNow(),
+      views[view],
+      view
+    )
   }
 
   handleSelectEvent = (...args) => {
